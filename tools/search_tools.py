@@ -1,6 +1,11 @@
 from duckduckgo_search import DDGS
+from opentelemetry import trace
+from tools.telemetry import get_tracer
+
+tracer = get_tracer()
 
 
+@tracer.start_as_current_span("search_web")
 def search_web(query: str) -> str:
     """Searches the web for recipes, cooking ideas, grocery stores, or restaurants.
 
@@ -10,6 +15,9 @@ def search_web(query: str) -> str:
     Returns:
         A string containing the top search results with titles, URLs, and snippets.
     """
+    span = trace.get_current_span()
+    span.set_attribute("search.query", query)
+
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=5))

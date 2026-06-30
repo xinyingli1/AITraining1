@@ -1,8 +1,14 @@
 import os
+import google.auth
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from opentelemetry import trace
+from tools.telemetry import get_tracer
+
+
+tracer = get_tracer()
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -16,38 +22,48 @@ TOKEN_PATH = os.path.join(
 )
 
 
+
 def get_calendar_service():
     creds = None
 
-    # The file token.json stores the user's access and refresh tokens
-    if os.path.exists(TOKEN_PATH):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-        except Exception:
-            creds = None
+    # 1. Try Application Default Credentials (ADC) - standard for Google Cloud/Enterprise
+    try:
+        creds, _ = google.auth.default(scopes=SCOPES)
+        # Refresh the credentials to make sure they are valid
+        creds.refresh(Request())
+    except Exception:
+        creds = None
 
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    # 2. Fallback to local OAuth flow (token.json / credentials.json) for local development
+    if not creds:
+        if os.path.exists(TOKEN_PATH):
             try:
-                creds.refresh(Request())
+                creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
             except Exception:
                 creds = None
 
-        if not creds:
-            if not os.path.exists(CREDENTIALS_PATH):
-                return None
-            try:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    CREDENTIALS_PATH, SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-                # Save the credentials for the next run
-                with open(TOKEN_PATH, "w") as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"Authentication flow failed: {e}")
-                return None
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                except Exception:
+                    creds = None
+
+            if not creds:
+                if not os.path.exists(CREDENTIALS_PATH):
+                    return None
+                try:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        CREDENTIALS_PATH, SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
+                    # Save the credentials for the next run
+                    with open(TOKEN_PATH, "w") as token:
+                        token.write(creds.to_json())
+                except Exception as e:
+                    print(f"Authentication flow failed: {e}")
+                    return None
+
 
     try:
         service = build("calendar", "v3", credentials=creds)
@@ -57,6 +73,7 @@ def get_calendar_service():
         return None
 
 
+@tracer.start_as_current_span("schedule_meal")
 def schedule_meal(
     summary: str, start_time_iso: str, end_time_iso: str, description: str = ""
 ) -> str:
@@ -71,6 +88,11 @@ def schedule_meal(
     Returns:
         A success message with the event link, or an error instruction.
     """
+    span = trace.get_current_span()
+    span.set_attribute("calendar.event_summary", summary)
+    span.set_attribute("calendar.start_time", start_time_iso)
+    span.set_attribute("calendar.end_time", end_time_iso)
+
     service = get_calendar_service()
     if not service:
         return (
@@ -95,11 +117,14 @@ def schedule_meal(
 
     try:
         event = service.events().insert(calendarId="primary", body=event).execute()
+        span.set_attribute("calendar.event_id", event.get("id", ""))
         return f"Successfully scheduled '{summary}' on Google Calendar! Event link: {event.get('htmlLink')}"
     except Exception as e:
+        span.record_exception(e)
         return f"Failed to create calendar event: {str(e)}"
 
 
+@tracer.start_as_current_span("list_calendar_events")
 def list_calendar_events(start_time_iso: str, end_time_iso: str) -> str:
     """Lists Google Calendar events within a specific time range to help identify free slots or existing plans.
 
@@ -110,7 +135,12 @@ def list_calendar_events(start_time_iso: str, end_time_iso: str) -> str:
     Returns:
         A list of scheduled events, or an error/empty message.
     """
+    span = trace.get_current_span()
+    span.set_attribute("calendar.query_start", start_time_iso)
+    span.set_attribute("calendar.query_end", end_time_iso)
+
     service = get_calendar_service()
+
     if not service:
         return (
             "Error: Google Calendar integration is not configured. "

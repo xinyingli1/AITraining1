@@ -18,7 +18,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Set default command to run the interactive agent
-# Note: Since this is an interactive CLI agent, you must run the container with -it flags:
-# docker run -it meal-planning-agent
-CMD ["python", "meal_planning_agent.py"]
+# Expose the port used by Google Cloud Run (defaults to 8080)
+EXPOSE 8080
+
+# Run the FastAPI application using uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
+

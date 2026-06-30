@@ -3,3 +3,10 @@ google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
 duckduckgo_search
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+google-cloud-firestore
+opentelemetry-exporter-gcp-trace
+fastapi
+uvicorn

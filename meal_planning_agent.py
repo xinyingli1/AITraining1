@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from google.antigravity import Agent, LocalAgentConfig, types
 from google.antigravity.hooks import policy
 
@@ -7,6 +8,8 @@ from tools.profile_tools import get_user_profile, update_user_profile
 from tools.calendar_tools import schedule_meal, list_calendar_events
 from tools.search_tools import search_web
 from tools.payment_tools import process_payment
+from tools.telemetry import init_telemetry, get_tracer
+
 
 
 # Define the safety policy handler for payments
@@ -18,11 +21,16 @@ async def payment_confirmation_handler(tool_call) -> bool:
 
     print("\n==================================================")
     print("⚠️  [PAYMENT AUTHORIZATION REQUIRED] ⚠️")
-    print("The Meal Planning Agent is requesting to pay:")
+    print(f"The Meal Planning Agent is requesting to pay:")
     print(f"  - Amount  : ${amount:.2f}")
     print(f"  - Item    : {item}")
     print(f"  - Merchant: {merchant}")
     print("==================================================")
+
+    # Check if we are running in an interactive terminal
+    if not sys.stdin.isatty():
+        print("❌ [PAYMENT DENIED] Non-interactive environment detected. Auto-denying payment.")
+        return False
 
     loop = asyncio.get_event_loop()
     while True:
@@ -70,16 +78,30 @@ Be friendly, organized, and proactive in helping the user manage their meals.
 """
 
 
+# Configure safety policies
+POLICIES = [
+    # Deny run_command completely for safety
+    policy.deny("run_command"),
+    # Intercept process_payment and require user approval for amounts >= $10.00
+    policy.ask_user(
+        "process_payment",
+        handler=payment_confirmation_handler,
+        when=lambda args: args.get("amount", 0) >= 10.0,
+    ),
+    # Auto-allow process_payment for amounts < $10.00
+    policy.allow(
+        "process_payment",
+        when=lambda args: args.get("amount", 0) < 10.0,
+    ),
+    # Allow all other tools
+    policy.allow_all(),
+]
+
+
 async def main():
-    # Configure safety policies
-    policies = [
-        # Deny run_command completely for safety
-        policy.deny("run_command"),
-        # Intercept process_payment and require user approval
-        policy.ask_user("process_payment", handler=payment_confirmation_handler),
-        # Allow all other tools
-        policy.allow_all(),
-    ]
+    # Initialize telemetry
+    init_telemetry()
+    tracer = get_tracer()
 
     # Create the agent configuration
     config = LocalAgentConfig(
@@ -92,7 +114,7 @@ async def main():
             search_web,
             process_payment,
         ],
-        policies=policies,
+        policies=POLICIES,
         capabilities=types.CapabilitiesConfig(
             enable_subagents=True,
         ),
@@ -130,10 +152,15 @@ async def main():
 
             print("Agent: ", end="", flush=True)
             try:
-                response = await agent.chat(user_input)
-                async for chunk in response:
-                    print(chunk, end="", flush=True)
-                print()
+                with tracer.start_as_current_span("agent_chat_turn") as span:
+                    span.set_attribute("user.input", user_input)
+                    response = await agent.chat(user_input)
+                    response_chunks = []
+                    async for chunk in response:
+                        print(chunk, end="", flush=True)
+                        response_chunks.append(chunk)
+                    print()
+                    span.set_attribute("agent.response", "".join(response_chunks))
             except Exception as e:
                 print(f"\nAn error occurred: {e}")
 
@@ -141,3 +168,4 @@ async def main():
 if __name__ == "__main__":
     # Ensure we can run async main
     asyncio.run(main())
+
