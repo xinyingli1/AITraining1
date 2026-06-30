@@ -1,0 +1,10 @@
+.git
+.gitignore
+.github
+__pycache__
+*.pyc
+.pytest_cache
+user_profile.json
+token.json
+credentials.json
+log.txt

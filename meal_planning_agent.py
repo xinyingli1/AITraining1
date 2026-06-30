@@ -1,6 +1,4 @@
 import asyncio
-import os
-import sys
 from google.antigravity import Agent, LocalAgentConfig, types
 from google.antigravity.hooks import policy
 
@@ -10,33 +8,38 @@ from tools.calendar_tools import schedule_meal, list_calendar_events
 from tools.search_tools import search_web
 from tools.payment_tools import process_payment
 
+
 # Define the safety policy handler for payments
 async def payment_confirmation_handler(tool_call) -> bool:
     args = tool_call.args
     amount = args.get("amount")
     item = args.get("item")
     merchant = args.get("merchant")
-    
-    print(f"\n==================================================")
-    print(f"⚠️  [PAYMENT AUTHORIZATION REQUIRED] ⚠️")
-    print(f"The Meal Planning Agent is requesting to pay:")
+
+    print("\n==================================================")
+    print("⚠️  [PAYMENT AUTHORIZATION REQUIRED] ⚠️")
+    print("The Meal Planning Agent is requesting to pay:")
     print(f"  - Amount  : ${amount:.2f}")
     print(f"  - Item    : {item}")
     print(f"  - Merchant: {merchant}")
-    print(f"==================================================")
-    
+    print("==================================================")
+
     loop = asyncio.get_event_loop()
     while True:
         # Run input() in an executor to avoid blocking the async event loop
-        choice = await loop.run_in_executor(None, lambda: input("Do you approve this payment? (yes/no): ").strip().lower())
-        if choice in ['y', 'yes']:
+        choice = await loop.run_in_executor(
+            None,
+            lambda: input("Do you approve this payment? (yes/no): ").strip().lower(),
+        )
+        if choice in ["y", "yes"]:
             print("✅ Payment approved.")
             return True
-        elif choice in ['n', 'no']:
+        elif choice in ["n", "no"]:
             print("❌ Payment denied.")
             return False
         else:
             print("Please enter 'yes' or 'no'.")
+
 
 # System instructions to define the agent's persona and responsibilities
 SYSTEM_INSTRUCTIONS = """You are the "Meal Planning Agent", a helpful personal assistant dedicated to automating meal planning for the user.
@@ -66,6 +69,7 @@ Your core responsibilities:
 Be friendly, organized, and proactive in helping the user manage their meals.
 """
 
+
 async def main():
     # Configure safety policies
     policies = [
@@ -86,12 +90,12 @@ async def main():
             schedule_meal,
             list_calendar_events,
             search_web,
-            process_payment
+            process_payment,
         ],
         policies=policies,
         capabilities=types.CapabilitiesConfig(
             enable_subagents=True,
-        )
+        ),
     )
 
     print("Initializing Meal Planning Agent...")
@@ -101,7 +105,7 @@ async def main():
         print("  Type your requests (e.g., 'Plan dinner for tonight')")
         print("  Type 'exit' or 'quit' to end the session.       ")
         print("==================================================\n")
-        
+
         # Display current profile if it exists
         try:
             profile_str = get_user_profile()
@@ -116,11 +120,11 @@ async def main():
             except (KeyboardInterrupt, EOFError):
                 print("\nGoodbye!")
                 break
-                
-            if user_input.strip().lower() in ['exit', 'quit']:
+
+            if user_input.strip().lower() in ["exit", "quit"]:
                 print("Goodbye!")
                 break
-                
+
             if not user_input.strip():
                 continue
 
@@ -132,6 +136,7 @@ async def main():
                 print()
             except Exception as e:
                 print(f"\nAn error occurred: {e}")
+
 
 if __name__ == "__main__":
     # Ensure we can run async main

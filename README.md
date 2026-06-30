@@ -77,3 +77,10 @@ python3 meal_planning_agent.py
   *(You will see a terminal prompt asking for your approval before the payment is processed!)*
 - **Delegation**:
   - `"Use a specialized subagent to analyze the nutritional value of a classic lasagna recipe."`
+
+---
+
+## CI/CD & Deployment
+
+For detailed instructions on running tests, linting, Docker containerization, and the GitHub Actions CI/CD pipeline, please refer to the [DEPLOYMENT.md](file:///Users/xinyingli/Project/AITraining1/DEPLOYMENT.md) guide.
+
