@@ -1,0 +1,5 @@
+google-antigravity
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+duckduckgo_search
