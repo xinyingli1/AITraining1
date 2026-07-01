@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from google.antigravity import Agent, LocalAgentConfig, types
-from google.antigravity.hooks import policy, hooks
+from google.antigravity.hooks import policy
 
 # Import custom tools
 from tools.profile_tools import get_user_profile, update_user_profile
@@ -10,45 +10,11 @@ from tools.search_tools import search_web
 from tools.payment_tools import process_payment
 from tools.telemetry import init_telemetry, get_tracer
 from tools.memory import capture_user_input, post_turn_memory_hook
+from agents.coordinator import get_coordinator_config, current_session_id, current_save_dir, ensure_trajectory_exists
 
 
 
 
-# Define the safety policy handler for payments
-async def payment_confirmation_handler(tool_call) -> bool:
-    args = tool_call.args
-    amount = args.get("amount")
-    item = args.get("item")
-    merchant = args.get("merchant")
-
-    print("\n==================================================")
-    print("⚠️  [PAYMENT AUTHORIZATION REQUIRED] ⚠️")
-    print(f"The Meal Planning Agent is requesting to pay:")
-    print(f"  - Amount  : ${amount:.2f}")
-    print(f"  - Item    : {item}")
-    print(f"  - Merchant: {merchant}")
-    print("==================================================")
-
-    # Check if we are running in an interactive terminal
-    if not sys.stdin.isatty():
-        print("❌ [PAYMENT DENIED] Non-interactive environment detected. Auto-denying payment.")
-        return False
-
-    loop = asyncio.get_event_loop()
-    while True:
-        # Run input() in an executor to avoid blocking the async event loop
-        choice = await loop.run_in_executor(
-            None,
-            lambda: input("Do you approve this payment? (yes/no): ").strip().lower(),
-        )
-        if choice in ["y", "yes"]:
-            print("✅ Payment approved.")
-            return True
-        elif choice in ["n", "no"]:
-            print("❌ Payment denied.")
-            return False
-        else:
-            print("Please enter 'yes' or 'no'.")
 
 
 # System instructions to define the agent's persona and responsibilities
@@ -80,29 +46,9 @@ Be friendly, organized, and proactive in helping the user manage their meals.
 """
 
 
-# Configure safety policies
-POLICIES = [
-    # Deny run_command completely for safety
-    policy.deny("run_command"),
-    # Intercept process_payment and require user approval for amounts >= $10.00
-    policy.ask_user(
-        "process_payment",
-        handler=payment_confirmation_handler,
-        when=lambda args: args.get("amount", 0) >= 10.0,
-    ),
-    # Auto-allow process_payment for amounts < $10.00
-    policy.allow(
-        "process_payment",
-        when=lambda args: args.get("amount", 0) < 10.0,
-    ),
-    # Allow all other tools
-    policy.allow_all(),
-]
 
 
-@hooks.on_compaction
-async def log_compaction(data):
-    print(f"\n⚡ [CONTEXT COMPACTION] History was compacted. Details: {data}")
+
 
 
 async def main():
@@ -111,24 +57,16 @@ async def main():
     init_telemetry()
     tracer = get_tracer()
 
-    # Create the agent configuration
-    config = LocalAgentConfig(
-        system_instructions=SYSTEM_INSTRUCTIONS,
-        tools=[
-            get_user_profile,
-            update_user_profile,
-            schedule_meal,
-            list_calendar_events,
-            search_web,
-            process_payment,
-        ],
-        policies=POLICIES,
-        hooks=[log_compaction, capture_user_input, post_turn_memory_hook],
-        capabilities=types.CapabilitiesConfig(
-            enable_subagents=True,
-            compaction_threshold=10000,
-        ),
-    )
+    # Create the coordinator configuration
+    conversation_id = "cli_session"
+    save_dir = "/tmp/conversations"
+    
+    # Ensure the trajectory file exists so the harness doesn't fail
+    ensure_trajectory_exists(conversation_id, save_dir)
+    
+    config = get_coordinator_config(conversation_id, save_dir)
+
+
 
 
     print("Initializing Meal Planning Agent...")
@@ -163,9 +101,16 @@ async def main():
 
             print("Agent: ", end="", flush=True)
             try:
+                # Wrap the chat interaction in a span for distributed tracing
                 with tracer.start_as_current_span("agent_chat_turn") as span:
-                    span.set_attribute("user.input", user_input)
+                    span.set_attribute("chat.user_message", user_input)
+                    
+                    # Set the session context for the worker tools
+                    current_session_id.set(agent.conversation_id or conversation_id)
+                    current_save_dir.set(save_dir)
+                    
                     response = await agent.chat(user_input)
+
                     response_chunks = []
                     async for chunk in response:
                         print(chunk, end="", flush=True)

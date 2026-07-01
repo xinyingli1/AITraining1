@@ -1,18 +1,16 @@
 import os
+import uuid
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from google.antigravity import Agent, LocalAgentConfig, types
 
-# Import the core agent components
-from meal_planning_agent import SYSTEM_INSTRUCTIONS, POLICIES, log_compaction
-
-from tools.profile_tools import get_user_profile, update_user_profile
-from tools.calendar_tools import schedule_meal, list_calendar_events
-from tools.search_tools import search_web
-from tools.payment_tools import process_payment
 from tools.telemetry import init_telemetry, get_tracer
-from tools.memory import capture_user_input, post_turn_memory_hook
+from agents.coordinator import get_coordinator_config, current_session_id, current_save_dir, ensure_trajectory_exists
+
+
+
 
 
 # Configuration
@@ -59,6 +57,10 @@ async def chat(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
+    # Generate a new conversation ID if not provided
+    conversation_id = request.conversation_id or str(uuid.uuid4())
+
+    
     # If user_id is provided, set it in the environment so the Firestore profile tool can pick it up.
     # This enables multi-tenant profile management.
     if request.user_id:
@@ -67,26 +69,11 @@ async def chat(request: ChatRequest):
         # Default fallback
         os.environ["USER_ID"] = "default_user"
 
-    # Configure the agent specifically for this request's conversation
-    config = LocalAgentConfig(
-        system_instructions=SYSTEM_INSTRUCTIONS,
-        tools=[
-            get_user_profile,
-            update_user_profile,
-            schedule_meal,
-            list_calendar_events,
-            search_web,
-            process_payment
-        ],
-        policies=POLICIES,
-        hooks=[log_compaction, capture_user_input, post_turn_memory_hook],
-        capabilities=types.CapabilitiesConfig(
-            enable_subagents=True,
-            compaction_threshold=20000,
-        ),
-        conversation_id=request.conversation_id,
-        save_dir=SAVE_DIR,
-    )
+    # Ensure the trajectory file exists so the harness doesn't fail
+    ensure_trajectory_exists(conversation_id, SAVE_DIR)
+
+    # Create the coordinator configuration
+    config = get_coordinator_config(conversation_id, SAVE_DIR)
 
 
 
@@ -101,7 +88,12 @@ async def chat(request: ChatRequest):
             if request.conversation_id:
                 span.set_attribute("api.conversation_id", request.conversation_id)
             
+            # Start the agent session and send the message
             async with Agent(config) as agent:
+                # Set the session context for the worker tools
+                current_session_id.set(agent.conversation_id)
+                current_save_dir.set(SAVE_DIR)
+                
                 # Execute the agent chat
                 response = await agent.chat(request.message)
                 # Compile the full response text (non-streaming for REST API simplicity)

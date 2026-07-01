@@ -201,13 +201,22 @@ We have integrated OpenTelemetry into the Meal Planning Agent to support distrib
 
 For enterprise-grade deployment (e.g., Google Cloud Run, Vertex AI Agent Builder), the application has been restructured to run as a stateless **FastAPI Web Service** and integrate natively with Google Cloud services.
 
-### 1. Architecture Overview
-Instead of running as an interactive CLI loop, the agent is wrapped in a FastAPI web server ([app.py](file:///app.py)).
-* **Lifespan Initialization**: Initializes OpenTelemetry and registers the Google Cloud Trace exporter when the container starts.
-* **Stateless API (`POST /chat`)**: Accepts JSON requests containing `message`, `conversation_id` (optional, for session persistence), and `user_id` (optional, for multi-tenant profiles). Returns the agent's text response and the `conversation_id`.
-* **Health Probes (`GET /healthz`)**: Returns a `200 OK` status, satisfying Google Cloud Run's liveness and readiness requirements.
-* **History Compaction**: To prevent token bloat and reduce latency over long sessions, the agent is configured with `compaction_threshold = 20000` (tokens). When the conversation history exceeds this size, the SDK automatically compacts it. A custom `on_compaction` hook is registered to log these events.
-* **Asynchronous Memory Generation**: The agent is configured with `capture_user_input` and `post_turn_memory_hook` hooks. After every turn, the agent asynchronously analyzes the latest user message and agent response using a background Gemini call, extracts new food preferences, allergies, and dietary restrictions, and silently updates the user's profile in Firestore (or local file) without blocking the user's chat experience.
+#### 1. Architecture Overview
+Instead of a single monolithic agent, the system is designed as a **Coordinator-based Multi-Agent System** ([agents/coordinator.py](file:///agents/coordinator.py)) wrapped in a FastAPI web server ([app.py](file:///app.py)):
+
+*   **Coordinator Agent**: A central orchestrator that analyzes the user's request, plans the execution steps, delegates tasks to specialized subagents by calling them as tools, and compiles the final response.
+*   **Specialized Subagents**:
+    *   **Profile Agent** ([agents/profile_agent.py](file:///agents/profile_agent.py)): Manages user profiles (preferences, allergies, restrictions).
+    *   **Meal Planner Agent** ([agents/planner_agent.py](file:///agents/planner_agent.py)): Researches recipes and plans meals.
+    *   **Calendar Agent** ([agents/calendar_agent.py](file:///agents/calendar_agent.py)): Handles calendar lookups and event scheduling.
+    *   **Payment Agent** ([agents/payment_agent.py](file:///agents/payment_agent.py)): Processes purchases under strict safety policies.
+*   **Lifespan Initialization**: Initializes OpenTelemetry and registers the Google Cloud Trace exporter when the container starts.
+*   **Stateless API (`POST /chat`)**: Accepts JSON requests containing `message`, `conversation_id` (optional, for session persistence), and `user_id` (optional, for multi-tenant profiles). Returns the Coordinator's aggregated text response and the `conversation_id`.
+*   **Health Probes (`GET /healthz`)**: Returns a `200 OK` status, satisfying Google Cloud Run's liveness and readiness requirements.
+*   **History Compaction**: The Coordinator is configured with `compaction_threshold = 10000` (tokens). When its history exceeds this size, the SDK automatically compacts it. A custom `on_compaction` hook is registered to log these events.
+*   **Asynchronous Memory Generation**: The Coordinator is configured with `capture_user_input` and `post_turn_memory_hook` hooks. After every turn, the Coordinator asynchronously analyzes the latest user message and response in the background, extracts new food preferences/allergies/restrictions, and silently updates the user's profile in Firestore (or local file).
+
+For a detailed breakdown of the multi-agent design, see [multi_agent_design.md](file:///Users/xinyingli/.gemini/jetski/brain/304cf2e2-a6af-4635-a950-becde08906ad/multi_agent_design.md).
 
 
 
@@ -259,6 +268,40 @@ The agent implements a multi-layered **PII Redaction system** ([tools/pii.py](fi
 * **Query Redaction**: Before sending search queries to external search engines (via DuckDuckGo), the agent automatically redacts emails, phone numbers, credit card numbers, and SSNs.
 * **Anonymized Memory Generation**: The asynchronous memory generator redacts PII from the conversation turn before sending it to Gemini, ensuring that no sensitive user data is processed or stored in user profiles.
 * **Telemetry Redaction (`PiiRedactingSpanProcessor`)**: A custom OpenTelemetry `SpanProcessor` is registered first in the tracer provider. When any span ends, the processor automatically scans and redacts PII from all span attributes in-place. This guarantees that no PII is ever exported to Jaeger, Google Cloud Trace, or console logs.
+
+### 7. Deployment via Agents CLI (GCP Agent Runtime)
+For automated deployment to the hosted **Google Cloud Agent Runtime**, you can use the official **Agents CLI** (`agents-cli`) or the **ADK** tool:
+
+#### Option A: Using `agents-cli` (Recommended)
+1. **Install the CLI**:
+   ```bash
+   pip install google-agents-cli uv
+   agents-cli setup
+   ```
+2. **Scaffold Deployment Configs**:
+   Enhance your existing project directory with the required Agent Runtime configuration files (including `pyproject.toml` and build scripts):
+   ```bash
+   agents-cli scaffold enhance --deployment-target agent_engine
+   ```
+3. **Connect to Google Cloud**:
+   Authenticate and set your target GCP project:
+   ```bash
+   gcloud auth application-default login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+4. **Deploy**:
+   ```bash
+   agents-cli deploy
+   ```
+   This command automatically builds the container, pushes it to Google Artifact Registry, and deploys it to the Agent Runtime environment configured in `pyproject.toml`.
+
+#### Option B: Using the `adk` CLI
+Alternatively, you can deploy directly using the `adk` CLI tool:
+```bash
+uv run adk deploy agent_engine meal_planning_agent \
+  --project="YOUR_PROJECT_ID" \
+  --region="us-central1"
+```
 
 ---
 
