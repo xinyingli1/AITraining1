@@ -83,7 +83,7 @@ def init_telemetry(service_name="meal-planning-agent"):
         # Automatically detects project ID using Application Default Credentials (ADC)
         gcp_exporter = CloudTraceSpanExporter()
         provider.add_span_processor(BatchSpanProcessor(gcp_exporter))
-    except Exception as e:
+    except Exception:
         # Expected to fail locally if GCP project or ADC is not configured
         pass
 

@@ -1,4 +1,3 @@
-import pytest
 from tools.pii import redact_pii
 from tools.telemetry import PiiRedactingSpanProcessor
 from opentelemetry.sdk.trace import ReadableSpan

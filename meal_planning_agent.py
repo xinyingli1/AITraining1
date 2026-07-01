@@ -1,15 +1,9 @@
 import asyncio
-import sys
-from google.antigravity import Agent, LocalAgentConfig, types
-from google.antigravity.hooks import policy
+from google.antigravity import Agent
 
 # Import custom tools
-from tools.profile_tools import get_user_profile, update_user_profile
-from tools.calendar_tools import schedule_meal, list_calendar_events
-from tools.search_tools import search_web
-from tools.payment_tools import process_payment
+from tools.profile_tools import get_user_profile
 from tools.telemetry import init_telemetry, get_tracer
-from tools.memory import capture_user_input, post_turn_memory_hook
 from agents.coordinator import get_coordinator_config, current_session_id, current_save_dir, ensure_trajectory_exists
 
 

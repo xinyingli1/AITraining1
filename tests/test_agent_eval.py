@@ -1,6 +1,5 @@
 import os
 import json
-import asyncio
 import pytest
 import unittest.mock as mock
 from google.antigravity import Agent

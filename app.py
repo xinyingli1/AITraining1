@@ -4,7 +4,7 @@ import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from google.antigravity import Agent, LocalAgentConfig, types
+from google.antigravity import Agent
 
 from tools.telemetry import init_telemetry, get_tracer
 from agents.coordinator import get_coordinator_config, current_session_id, current_save_dir, ensure_trajectory_exists
