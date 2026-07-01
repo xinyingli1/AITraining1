@@ -6,6 +6,17 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from opentelemetry import trace
 from tools.telemetry import get_tracer
+from typing import Annotated
+from pydantic import validate_call, Field
+
+IsoDateTime = Annotated[
+    str,
+    Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$",
+        description="ISO 8601 datetime string (e.g. 2026-06-30T19:00:00-07:00)",
+    ),
+]
+
 
 
 tracer = get_tracer()
@@ -74,9 +85,14 @@ def get_calendar_service():
 
 
 @tracer.start_as_current_span("schedule_meal")
+@validate_call
 def schedule_meal(
-    summary: str, start_time_iso: str, end_time_iso: str, description: str = ""
+    summary: Annotated[str, Field(min_length=1, description="The title of the event.")],
+    start_time_iso: IsoDateTime,
+    end_time_iso: IsoDateTime,
+    description: str = "",
 ) -> str:
+
     """Schedules a meal, grocery shopping trip, or cooking session on the user's Google Calendar.
 
     Args:
@@ -125,7 +141,11 @@ def schedule_meal(
 
 
 @tracer.start_as_current_span("list_calendar_events")
-def list_calendar_events(start_time_iso: str, end_time_iso: str) -> str:
+@validate_call
+def list_calendar_events(
+    start_time_iso: IsoDateTime, end_time_iso: IsoDateTime
+) -> str:
+
     """Lists Google Calendar events within a specific time range to help identify free slots or existing plans.
 
     Args:

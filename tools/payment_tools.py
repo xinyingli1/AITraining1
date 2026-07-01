@@ -1,3 +1,5 @@
+from typing import Annotated
+from pydantic import validate_call, Field
 from opentelemetry import trace
 from tools.telemetry import get_tracer
 
@@ -5,7 +7,18 @@ tracer = get_tracer()
 
 
 @tracer.start_as_current_span("process_payment")
-def process_payment(amount: float, item: str, merchant: str) -> str:
+@validate_call
+def process_payment(
+    amount: Annotated[
+        float, Field(gt=0, description="The amount to pay in USD. Must be greater than 0.")
+    ],
+    item: Annotated[
+        str, Field(min_length=1, description="The item being purchased.")
+    ],
+    merchant: Annotated[
+        str, Field(min_length=1, description="The store or merchant name.")
+    ],
+) -> str:
     """Processes a payment for groceries, meal kits, or restaurant orders.
 
     CRITICAL: This tool involves spending money and requires explicit user confirmation.
@@ -24,3 +37,4 @@ def process_payment(amount: float, item: str, merchant: str) -> str:
     span.set_attribute("payment.merchant", merchant)
 
     return f"SUCCESS: Payment of ${amount:.2f} to {merchant} for '{item}' was successfully processed."
+

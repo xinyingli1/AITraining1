@@ -1,7 +1,10 @@
 import json
 import os
+from typing import Annotated
+from pydantic import validate_call, Field
 from opentelemetry import trace
 from tools.telemetry import get_tracer
+
 from google.cloud import firestore
 
 tracer = get_tracer()
@@ -77,11 +80,31 @@ def get_user_profile() -> str:
 
 
 @tracer.start_as_current_span("update_user_profile")
+@validate_call
 def update_user_profile(
-    preferences: list[str] = None,
-    allergies: list[str] = None,
-    restrictions: list[str] = None,
+    preferences: Annotated[
+        list[Annotated[str, Field(min_length=1)]] | None,
+        Field(
+            default=None,
+            description="List of food preferences to add (e.g., ['Italian', 'spicy food']).",
+        ),
+    ] = None,
+    allergies: Annotated[
+        list[Annotated[str, Field(min_length=1)]] | None,
+        Field(
+            default=None,
+            description="List of allergies to add (e.g., ['peanuts', 'shellfish']).",
+        ),
+    ] = None,
+    restrictions: Annotated[
+        list[Annotated[str, Field(min_length=1)]] | None,
+        Field(
+            default=None,
+            description="List of dietary restrictions to add (e.g., ['vegetarian', 'gluten-free']).",
+        ),
+    ] = None,
 ) -> str:
+
     """Updates the user's profile with new preferences, allergies, or restrictions.
 
     Args:

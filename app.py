@@ -5,12 +5,15 @@ from pydantic import BaseModel
 from google.antigravity import Agent, LocalAgentConfig, types
 
 # Import the core agent components
-from meal_planning_agent import SYSTEM_INSTRUCTIONS, POLICIES
+from meal_planning_agent import SYSTEM_INSTRUCTIONS, POLICIES, log_compaction
+
 from tools.profile_tools import get_user_profile, update_user_profile
 from tools.calendar_tools import schedule_meal, list_calendar_events
 from tools.search_tools import search_web
 from tools.payment_tools import process_payment
 from tools.telemetry import init_telemetry, get_tracer
+from tools.memory import capture_user_input, post_turn_memory_hook
+
 
 # Configuration
 SAVE_DIR = os.environ.get("CONVERSATION_SAVE_DIR", "/tmp/conversations")
@@ -76,12 +79,16 @@ async def chat(request: ChatRequest):
             process_payment
         ],
         policies=POLICIES,
+        hooks=[log_compaction, capture_user_input, post_turn_memory_hook],
         capabilities=types.CapabilitiesConfig(
             enable_subagents=True,
+            compaction_threshold=20000,
         ),
         conversation_id=request.conversation_id,
-        save_dir=SAVE_DIR
+        save_dir=SAVE_DIR,
     )
+
+
 
     global tracer
     if tracer is None:

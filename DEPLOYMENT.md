@@ -12,6 +12,8 @@ This document explains the CI/CD pipeline, containerization, and local quality c
 5. [Production Deployment Considerations](#5-production-deployment-considerations)
 6. [Distributed Tracing (OpenTelemetry)](#6-distributed-tracing-opentelemetry)
 7. [Google Enterprise Agent Platform Deployment](#7-google-enterprise-agent-platform-deployment)
+8. [Infrastructure as Code (Terraform)](#8-infrastructure-as-code-terraform)
+
 
 
 
@@ -204,6 +206,10 @@ Instead of running as an interactive CLI loop, the agent is wrapped in a FastAPI
 * **Lifespan Initialization**: Initializes OpenTelemetry and registers the Google Cloud Trace exporter when the container starts.
 * **Stateless API (`POST /chat`)**: Accepts JSON requests containing `message`, `conversation_id` (optional, for session persistence), and `user_id` (optional, for multi-tenant profiles). Returns the agent's text response and the `conversation_id`.
 * **Health Probes (`GET /healthz`)**: Returns a `200 OK` status, satisfying Google Cloud Run's liveness and readiness requirements.
+* **History Compaction**: To prevent token bloat and reduce latency over long sessions, the agent is configured with `compaction_threshold = 20000` (tokens). When the conversation history exceeds this size, the SDK automatically compacts it. A custom `on_compaction` hook is registered to log these events.
+* **Asynchronous Memory Generation**: The agent is configured with `capture_user_input` and `post_turn_memory_hook` hooks. After every turn, the agent asynchronously analyzes the latest user message and agent response using a background Gemini call, extracts new food preferences, allergies, and dietary restrictions, and silently updates the user's profile in Firestore (or local file) without blocking the user's chat experience.
+
+
 
 ### 2. Google Cloud Services Integration
 
@@ -242,5 +248,69 @@ gcloud run deploy meal-planning-agent-service \
 ```
 
 *Note: For a fully enterprise-managed setup, you can remove the `GEMINI_API_KEY` environment variable and grant the Cloud Run Service Account the **Vertex AI User** (`roles/aiplatform.user`) role, allowing the Google Antigravity SDK to authenticate natively via Vertex AI.*
+
+### 5. Structured JSON Logging
+To integrate natively with **Google Cloud Logging (Stackdriver)**, components like the asynchronous memory generator ([tools/memory.py](file:///tools/memory.py)) output structured JSON logs instead of plain text:
+* **Log Format**: Logs are printed to standard output as a single-line JSON object containing fields like `severity` (e.g. `INFO`, `ERROR`, `WARNING`), `message`, `component`, `intent`, `stage`, and `outcome`.
+* **Automatic Parsing**: Google Cloud Run automatically captures and parses these JSON objects, mapping them to the correct severity levels and structured payload fields in your Cloud Logging console, allowing for easy querying and alerting.
+
+---
+
+## 8. Infrastructure as Code (Terraform)
+
+We use **Terraform** to provision and manage the Google Cloud resources required for the enterprise deployment. The Terraform files are located in the [terraform/](file:///terraform/) directory.
+
+### Resources Provisioned
+1. **Service Account**: A dedicated service account `meal-planning-agent-sa` for the Cloud Run service.
+2. **Firestore Database**: A default Native-mode Firestore instance (`(default)`) for storing user profiles.
+3. **IAM Bindings**:
+   * **Cloud Datastore User** (`roles/datastore.user`): Granted to the service account to access Firestore.
+   * **Cloud Trace Agent** (`roles/cloudtrace.agent`): Granted to the service account to write telemetry spans to Cloud Trace.
+   * **Vertex AI User** (`roles/aiplatform.user`): Granted to the service account to allow it to access Gemini models via Vertex AI without needing an API key.
+4. **Cloud Run Service (v2)**: Deploys the FastAPI container with the specified service account and environment variables.
+5. **IAM Policy**: Configures public, unauthenticated access (`allUsers` as `roles/run.invoker`) to the Cloud Run endpoint.
+
+### How to Deploy using Terraform
+
+1. **Change to the terraform directory**:
+   ```bash
+   cd terraform
+   ```
+
+2. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+3. **Configure Variables**:
+   Create a `terraform.tfvars` file to specify your GCP project and Docker image:
+   ```hcl
+   project_id = "your-gcp-project-id"
+   region     = "us-central1"
+   image_url  = "us-central1-docker.pkg.dev/your-gcp-project-id/your-repo/meal-planning-agent:latest"
+   
+   # Optional: Provide if you do not want to use Vertex AI IAM authentication
+   # gemini_api_key = "your-api-key"
+   ```
+
+4. **Plan the Deployment**:
+   Verify the resources that will be created:
+   ```bash
+   terraform plan
+   ```
+
+5. **Apply the Configuration**:
+   Deploy the infrastructure:
+   ```bash
+   terraform apply
+   ```
+
+6. **Retrieve the URL**:
+   After the deployment completes, Terraform will output the public URL of your Cloud Run service:
+   ```bash
+   # Example output:
+   # service_url = "https://meal-planning-agent-service-xxxxxx.a.run.app"
+   ```
+
 
 

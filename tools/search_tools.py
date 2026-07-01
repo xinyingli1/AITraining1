@@ -1,3 +1,5 @@
+from typing import Annotated
+from pydantic import validate_call, Field
 from duckduckgo_search import DDGS
 from opentelemetry import trace
 from tools.telemetry import get_tracer
@@ -6,11 +8,20 @@ tracer = get_tracer()
 
 
 @tracer.start_as_current_span("search_web")
-def search_web(query: str) -> str:
+@validate_call
+def search_web(
+    query: Annotated[
+        str,
+        Field(
+            min_length=1,
+            description="The search query (e.g., 'vegetarian lasagna recipe').",
+        ),
+    ]
+) -> str:
     """Searches the web for recipes, cooking ideas, grocery stores, or restaurants.
 
     Args:
-        query: The search query (e.g., "healthy vegetarian dinner recipes" or "grocery stores near me").
+        query: The search query (e.g., "vegetarian lasagna recipe").
 
     Returns:
         A string containing the top search results with titles, URLs, and snippets.

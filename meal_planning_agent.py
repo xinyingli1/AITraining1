@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from google.antigravity import Agent, LocalAgentConfig, types
-from google.antigravity.hooks import policy
+from google.antigravity.hooks import policy, hooks
 
 # Import custom tools
 from tools.profile_tools import get_user_profile, update_user_profile
@@ -9,6 +9,8 @@ from tools.calendar_tools import schedule_meal, list_calendar_events
 from tools.search_tools import search_web
 from tools.payment_tools import process_payment
 from tools.telemetry import init_telemetry, get_tracer
+from tools.memory import capture_user_input, post_turn_memory_hook
+
 
 
 
@@ -98,7 +100,13 @@ POLICIES = [
 ]
 
 
+@hooks.on_compaction
+async def log_compaction(data):
+    print(f"\n⚡ [CONTEXT COMPACTION] History was compacted. Details: {data}")
+
+
 async def main():
+
     # Initialize telemetry
     init_telemetry()
     tracer = get_tracer()
@@ -115,10 +123,13 @@ async def main():
             process_payment,
         ],
         policies=POLICIES,
+        hooks=[log_compaction, capture_user_input, post_turn_memory_hook],
         capabilities=types.CapabilitiesConfig(
             enable_subagents=True,
+            compaction_threshold=10000,
         ),
     )
+
 
     print("Initializing Meal Planning Agent...")
     async with Agent(config) as agent:

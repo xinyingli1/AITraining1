@@ -66,3 +66,16 @@ def test_update_user_profile(temp_profile_path):
     assert set(data["preferences"]) == {"Italian", "Mexican"}
     assert set(data["allergies"]) == {"Peanuts", "Shellfish"}
     assert set(data["restrictions"]) == {"Gluten-Free"}
+
+
+def test_update_user_profile_invalid_arguments(temp_profile_path):
+    from pydantic import ValidationError
+
+    # Test empty string inside list
+    with pytest.raises(ValidationError):
+        profile_tools.update_user_profile(preferences=[""])
+
+    # Test invalid type (string instead of list)
+    with pytest.raises(ValidationError):
+        profile_tools.update_user_profile(preferences="Italian")  # type: ignore
+
