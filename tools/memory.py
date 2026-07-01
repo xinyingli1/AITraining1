@@ -8,6 +8,8 @@ from google.antigravity import types as agy_types
 from google.antigravity.hooks import hooks
 
 from tools.profile_tools import update_user_profile
+from tools.pii import redact_pii
+
 
 # Context variable to store the latest user input for the current turn
 latest_user_input = contextvars.ContextVar("latest_user_input", default="")
@@ -34,6 +36,10 @@ async def capture_user_input(data: str) -> agy_types.HookResult:
 
 async def extract_and_save_memory(user_input: str, agent_response: str):
     """Asynchronously extracts memories from the turn and updates the user profile."""
+    # Redact PII from the inputs before logging or processing
+    user_input = redact_pii(user_input)
+    agent_response = redact_pii(agent_response)
+
     # Log the intent to start extraction
     log_json(
         "INFO",
@@ -42,6 +48,7 @@ async def extract_and_save_memory(user_input: str, agent_response: str):
         stage="started",
         user_input=user_input,
     )
+
 
     try:
         api_key = os.environ.get("GEMINI_API_KEY")

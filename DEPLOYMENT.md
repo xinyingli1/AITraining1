@@ -254,6 +254,12 @@ To integrate natively with **Google Cloud Logging (Stackdriver)**, components li
 * **Log Format**: Logs are printed to standard output as a single-line JSON object containing fields like `severity` (e.g. `INFO`, `ERROR`, `WARNING`), `message`, `component`, `intent`, `stage`, and `outcome`.
 * **Automatic Parsing**: Google Cloud Run automatically captures and parses these JSON objects, mapping them to the correct severity levels and structured payload fields in your Cloud Logging console, allowing for easy querying and alerting.
 
+### 6. PII Redaction & Data Privacy
+The agent implements a multi-layered **PII Redaction system** ([tools/pii.py](file:///tools/pii.py)) to protect user privacy and comply with data safety regulations:
+* **Query Redaction**: Before sending search queries to external search engines (via DuckDuckGo), the agent automatically redacts emails, phone numbers, credit card numbers, and SSNs.
+* **Anonymized Memory Generation**: The asynchronous memory generator redacts PII from the conversation turn before sending it to Gemini, ensuring that no sensitive user data is processed or stored in user profiles.
+* **Telemetry Redaction (`PiiRedactingSpanProcessor`)**: A custom OpenTelemetry `SpanProcessor` is registered first in the tracer provider. When any span ends, the processor automatically scans and redacts PII from all span attributes in-place. This guarantees that no PII is ever exported to Jaeger, Google Cloud Trace, or console logs.
+
 ---
 
 ## 8. Infrastructure as Code (Terraform)

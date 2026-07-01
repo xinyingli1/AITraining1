@@ -1,27 +1,63 @@
 import os
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import TracerProvider, SpanProcessor, ReadableSpan
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from opentelemetry.sdk.resources import Resource
+from tools.pii import redact_pii
 
 # Global tracer instance
 _tracer = None
 
+
+class PiiRedactingSpanProcessor(SpanProcessor):
+    """Span processor that redacts PII from all span attributes before exporting."""
+
+    def on_start(self, span, parent_context=None):
+        pass
+
+    def on_end(self, span: ReadableSpan) -> None:
+        if span.attributes:
+            try:
+                for key, value in list(span.attributes.items()):
+                    if isinstance(value, str):
+                        span.attributes[key] = redact_pii(value)
+                    elif isinstance(value, list):
+                        span.attributes[key] = [
+                            redact_pii(v) if isinstance(v, str) else v
+                            for v in value
+                        ]
+            except Exception:
+                try:
+                    for key, value in list(span._attributes.items()):
+                        if isinstance(value, str):
+                            span._attributes[key] = redact_pii(value)
+                        elif isinstance(value, list):
+                            span._attributes[key] = [
+                                redact_pii(v) if isinstance(v, str) else v
+                                for v in value
+                            ]
+                except Exception:
+                    pass
+
+
 def init_telemetry(service_name="meal-planning-agent"):
     global _tracer
-    
+
     # Create a resource to identify the service
-    resource = Resource(attributes={
-        "service.name": service_name,
-        "service.version": "1.0.0"
-    })
-    
+    resource = Resource(
+        attributes={"service.name": service_name, "service.version": "1.0.0"}
+    )
+
     # Initialize the Tracer Provider
     provider = TracerProvider(resource=resource)
-    
+
+    # Register the PII Redacting Span Processor first
+    provider.add_span_processor(PiiRedactingSpanProcessor())
+
     # Export to Console for local debugging/visibility
     console_exporter = ConsoleSpanExporter()
     provider.add_span_processor(BatchSpanProcessor(console_exporter))
+
     
     # Export to OTLP collector (e.g. Jaeger)
     # OpenTelemetry automatically looks at OTEL_EXPORTER_OTLP_ENDPOINT env var.

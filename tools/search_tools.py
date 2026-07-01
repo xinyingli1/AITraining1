@@ -3,6 +3,7 @@ from pydantic import validate_call, Field
 from duckduckgo_search import DDGS
 from opentelemetry import trace
 from tools.telemetry import get_tracer
+from tools.pii import redact_pii
 
 tracer = get_tracer()
 
@@ -26,14 +27,18 @@ def search_web(
     Returns:
         A string containing the top search results with titles, URLs, and snippets.
     """
+    # Redact PII from the query
+    redacted_query = redact_pii(query)
+
     span = trace.get_current_span()
-    span.set_attribute("search.query", query)
+    span.set_attribute("search.query", redacted_query)
 
     try:
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=5))
+            results = list(ddgs.text(redacted_query, max_results=5))
             if not results:
                 return "No search results found."
+
 
             formatted_results = []
             for idx, r in enumerate(results, 1):
