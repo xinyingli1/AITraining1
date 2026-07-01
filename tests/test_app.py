@@ -39,4 +39,3 @@ def test_chat_endpoint(mock_agent_class):
 
     # Verify Agent was initialized
     mock_agent_class.assert_called_once()
-

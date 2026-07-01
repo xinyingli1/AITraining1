@@ -78,4 +78,3 @@ def test_update_user_profile_invalid_arguments(temp_profile_path):
     # Test invalid type (string instead of list)
     with pytest.raises(ValidationError):
         profile_tools.update_user_profile(preferences="Italian")  # type: ignore
-

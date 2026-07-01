@@ -49,7 +49,6 @@ async def extract_and_save_memory(user_input: str, agent_response: str):
         user_input=user_input,
     )
 
-
     try:
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:

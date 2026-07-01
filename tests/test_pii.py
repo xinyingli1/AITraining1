@@ -3,6 +3,7 @@ from tools.telemetry import PiiRedactingSpanProcessor
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.util.types import Attributes
 
+
 def test_redact_pii_emails():
     text = "Contact me at john.doe@example.com or jane_doe123@gmail.co.uk."
     redacted = redact_pii(text)
@@ -46,12 +47,14 @@ def test_pii_redacting_span_processor():
             return self._attributes
 
     # Create a span with PII in attributes
-    span = MockSpan({
-        "search.query": "recipes for john.doe@example.com",
-        "payment.phone": "Call 123-456-7890",
-        "payment.amount": 45.50,  # Non-string attribute
-        "tags": ["email:john@example.com", "clean_tag"]  # List of strings
-    })
+    span = MockSpan(
+        {
+            "search.query": "recipes for john.doe@example.com",
+            "payment.phone": "Call 123-456-7890",
+            "payment.amount": 45.50,  # Non-string attribute
+            "tags": ["email:john@example.com", "clean_tag"],  # List of strings
+        }
+    )
 
     processor = PiiRedactingSpanProcessor()
     processor.on_end(span)

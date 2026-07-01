@@ -7,10 +7,12 @@ from pydantic import BaseModel
 from google.antigravity import Agent
 
 from tools.telemetry import init_telemetry, get_tracer
-from agents.coordinator import get_coordinator_config, current_session_id, current_save_dir, ensure_trajectory_exists
-
-
-
+from agents.coordinator import (
+    get_coordinator_config,
+    current_session_id,
+    current_save_dir,
+    ensure_trajectory_exists,
+)
 
 
 # Configuration
@@ -19,6 +21,7 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 
 # Tracer
 tracer = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,37 +33,41 @@ async def lifespan(app: FastAPI):
     yield
     print("Meal Planning Agent Web Service is shutting down...")
 
+
 app = FastAPI(
     title="Meal Planning Agent Service",
     description="Enterprise API endpoint for the Meal Planning Agent",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
+
 
 class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
     user_id: str | None = None
 
+
 class ChatResponse(BaseModel):
     response: str
     conversation_id: str
+
 
 @app.get("/healthz")
 async def healthz():
     """Liveness and readiness probe for Google Cloud Run."""
     return {"status": "healthy"}
 
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Chat endpoint for interacting with the agent."""
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
-    
+
     # Generate a new conversation ID if not provided
     conversation_id = request.conversation_id or str(uuid.uuid4())
 
-    
     # If user_id is provided, set it in the environment so the Firestore profile tool can pick it up.
     # This enables multi-tenant profile management.
     if request.user_id:
@@ -75,8 +82,6 @@ async def chat(request: ChatRequest):
     # Create the coordinator configuration
     config = get_coordinator_config(conversation_id, SAVE_DIR)
 
-
-
     global tracer
     if tracer is None:
         tracer = get_tracer()
@@ -87,23 +92,22 @@ async def chat(request: ChatRequest):
             span.set_attribute("api.user_id", os.environ["USER_ID"])
             if request.conversation_id:
                 span.set_attribute("api.conversation_id", request.conversation_id)
-            
+
             # Start the agent session and send the message
             async with Agent(config) as agent:
                 # Set the session context for the worker tools
                 current_session_id.set(agent.conversation_id)
                 current_save_dir.set(SAVE_DIR)
-                
+
                 # Execute the agent chat
                 response = await agent.chat(request.message)
                 # Compile the full response text (non-streaming for REST API simplicity)
                 response_text = await response.text()
-                
+
                 span.set_attribute("api.response_length", len(response_text))
-                
+
                 return ChatResponse(
-                    response=response_text,
-                    conversation_id=agent.conversation_id
+                    response=response_text, conversation_id=agent.conversation_id
                 )
 
     except Exception as e:

@@ -37,9 +37,7 @@ async def payment_confirmation_handler(tool_call) -> bool:
         # Run input() in an executor to avoid blocking the async event loop
         choice = await loop.run_in_executor(
             None,
-            lambda: input("Do you authorize this payment? (yes/no): ")
-            .strip()
-            .lower(),
+            lambda: input("Do you authorize this payment? (yes/no): ").strip().lower(),
         )
         if choice in ["yes", "y"]:
             print("✅ [PAYMENT APPROVED]")
@@ -60,7 +58,6 @@ POLICIES = [
     # Allow all other tools
     policy.allow_all(),
 ]
-
 
 
 def get_agent_config(conversation_id: str, save_dir: str) -> LocalAgentConfig:

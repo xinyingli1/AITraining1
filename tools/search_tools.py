@@ -17,7 +17,7 @@ def search_web(
             min_length=1,
             description="The search query (e.g., 'vegetarian lasagna recipe').",
         ),
-    ]
+    ],
 ) -> str:
     """Searches the web for recipes, cooking ideas, grocery stores, or restaurants.
 
@@ -38,7 +38,6 @@ def search_web(
             results = list(ddgs.text(redacted_query, max_results=5))
             if not results:
                 return "No search results found."
-
 
             formatted_results = []
             for idx, r in enumerate(results, 1):

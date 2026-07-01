@@ -10,11 +10,10 @@ tracer = get_tracer()
 @validate_call
 def process_payment(
     amount: Annotated[
-        float, Field(gt=0, description="The amount to pay in USD. Must be greater than 0.")
+        float,
+        Field(gt=0, description="The amount to pay in USD. Must be greater than 0."),
     ],
-    item: Annotated[
-        str, Field(min_length=1, description="The item being purchased.")
-    ],
+    item: Annotated[str, Field(min_length=1, description="The item being purchased.")],
     merchant: Annotated[
         str, Field(min_length=1, description="The store or merchant name.")
     ],
@@ -37,4 +36,3 @@ def process_payment(
     span.set_attribute("payment.merchant", merchant)
 
     return f"SUCCESS: Payment of ${amount:.2f} to {merchant} for '{item}' was successfully processed."
-

@@ -95,7 +95,13 @@ def load_golden_dataset():
 @mock.patch("tools.search_tools.search_web", side_effect=mock_search_web)
 @mock.patch("tools.payment_tools.process_payment", side_effect=mock_process_payment)
 async def test_agent_scenarios(
-    mock_pay, mock_search, mock_list_cal, mock_sched, mock_upd_prof, mock_get_prof, test_case
+    mock_pay,
+    mock_search,
+    mock_list_cal,
+    mock_sched,
+    mock_upd_prof,
+    mock_get_prof,
+    test_case,
 ):
     global mock_profile_data, mock_calendar_events, recorded_tool_calls
 
@@ -112,9 +118,7 @@ async def test_agent_scenarios(
             events_str += f"- {e['summary']} ({e['start']} to {e['end']})\n"
         mock_calendar_events = events_str
     else:
-        mock_calendar_events = (
-            "No events scheduled in this time range. You are free!"
-        )
+        mock_calendar_events = "No events scheduled in this time range. You are free!"
 
     # Configure the Coordinator agent for the test
     conversation_id = "eval_session"
@@ -140,9 +144,9 @@ async def test_agent_scenarios(
         # 1. Assert expected tool calls were made
         called_tool_names = [call[0] for call in recorded_tool_calls]
         for expected_tool in test_case.get("expected_tool_calls", []):
-            assert (
-                expected_tool in called_tool_names
-            ), f"Expected tool '{expected_tool}' was not called. Called tools: {called_tool_names}"
+            assert expected_tool in called_tool_names, (
+                f"Expected tool '{expected_tool}' was not called. Called tools: {called_tool_names}"
+            )
 
         # 2. Assert expected tool arguments if specified
         if "expected_tool_args" in test_case:
@@ -168,12 +172,12 @@ async def test_agent_scenarios(
 
         # 3. Assert expected output substrings
         for expected_out in test_case.get("expected_outputs", []):
-            assert (
-                expected_out.lower() in full_response.lower()
-            ), f"Expected '{expected_out}' in response, but got: {full_response}"
+            assert expected_out.lower() in full_response.lower(), (
+                f"Expected '{expected_out}' in response, but got: {full_response}"
+            )
 
         # 4. Assert prohibited output substrings (e.g., allergies)
         for prohibited_out in test_case.get("prohibited_outputs", []):
-            assert (
-                prohibited_out.lower() not in full_response.lower()
-            ), f"Prohibited '{prohibited_out}' found in response: {full_response}"
+            assert prohibited_out.lower() not in full_response.lower(), (
+                f"Prohibited '{prohibited_out}' found in response: {full_response}"
+            )

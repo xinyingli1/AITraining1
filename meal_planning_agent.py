@@ -4,11 +4,12 @@ from google.antigravity import Agent
 # Import custom tools
 from tools.profile_tools import get_user_profile
 from tools.telemetry import init_telemetry, get_tracer
-from agents.coordinator import get_coordinator_config, current_session_id, current_save_dir, ensure_trajectory_exists
-
-
-
-
+from agents.coordinator import (
+    get_coordinator_config,
+    current_session_id,
+    current_save_dir,
+    ensure_trajectory_exists,
+)
 
 
 # System instructions to define the agent's persona and responsibilities
@@ -40,11 +41,6 @@ Be friendly, organized, and proactive in helping the user manage their meals.
 """
 
 
-
-
-
-
-
 async def main():
 
     # Initialize telemetry
@@ -54,14 +50,11 @@ async def main():
     # Create the coordinator configuration
     conversation_id = "cli_session"
     save_dir = "/tmp/conversations"
-    
+
     # Ensure the trajectory file exists so the harness doesn't fail
     ensure_trajectory_exists(conversation_id, save_dir)
-    
+
     config = get_coordinator_config(conversation_id, save_dir)
-
-
-
 
     print("Initializing Meal Planning Agent...")
     async with Agent(config) as agent:
@@ -98,11 +91,11 @@ async def main():
                 # Wrap the chat interaction in a span for distributed tracing
                 with tracer.start_as_current_span("agent_chat_turn") as span:
                     span.set_attribute("chat.user_message", user_input)
-                    
+
                     # Set the session context for the worker tools
                     current_session_id.set(agent.conversation_id or conversation_id)
                     current_save_dir.set(save_dir)
-                    
+
                     response = await agent.chat(user_input)
 
                     response_chunks = []
@@ -118,4 +111,3 @@ async def main():
 if __name__ == "__main__":
     # Ensure we can run async main
     asyncio.run(main())
-

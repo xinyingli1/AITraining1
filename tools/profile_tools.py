@@ -104,7 +104,6 @@ def update_user_profile(
         ),
     ] = None,
 ) -> str:
-
     """Updates the user's profile with new preferences, allergies, or restrictions.
 
     Args:
@@ -144,7 +143,9 @@ def update_user_profile(
     if allergies is not None:
         profile["allergies"] = list(set(profile.get("allergies", []) + allergies))
     if restrictions is not None:
-        profile["restrictions"] = list(set(profile.get("restrictions", []) + restrictions))
+        profile["restrictions"] = list(
+            set(profile.get("restrictions", []) + restrictions)
+        )
 
     # 3. Save profile
     saved_to_firestore = _update_firestore_profile(profile)

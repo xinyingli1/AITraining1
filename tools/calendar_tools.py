@@ -18,7 +18,6 @@ IsoDateTime = Annotated[
 ]
 
 
-
 tracer = get_tracer()
 
 # If modifying these scopes, delete the file token.json.
@@ -31,7 +30,6 @@ CREDENTIALS_PATH = os.path.join(
 TOKEN_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "token.json"
 )
-
 
 
 def get_calendar_service():
@@ -75,7 +73,6 @@ def get_calendar_service():
                     print(f"Authentication flow failed: {e}")
                     return None
 
-
     try:
         service = build("calendar", "v3", credentials=creds)
         return service
@@ -92,7 +89,6 @@ def schedule_meal(
     end_time_iso: IsoDateTime,
     description: str = "",
 ) -> str:
-
     """Schedules a meal, grocery shopping trip, or cooking session on the user's Google Calendar.
 
     Args:
@@ -142,10 +138,7 @@ def schedule_meal(
 
 @tracer.start_as_current_span("list_calendar_events")
 @validate_call
-def list_calendar_events(
-    start_time_iso: IsoDateTime, end_time_iso: IsoDateTime
-) -> str:
-
+def list_calendar_events(start_time_iso: IsoDateTime, end_time_iso: IsoDateTime) -> str:
     """Lists Google Calendar events within a specific time range to help identify free slots or existing plans.
 
     Args:

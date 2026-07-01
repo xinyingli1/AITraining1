@@ -29,4 +29,3 @@ def test_process_payment_invalid_arguments():
     # Test empty merchant
     with pytest.raises(ValidationError):
         payment_tools.process_payment(10.0, "Groceries", "")
-
