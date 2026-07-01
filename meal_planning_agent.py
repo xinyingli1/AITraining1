@@ -1,4 +1,10 @@
 import asyncio
+import os
+
+# Prevent local connections (like the localharness WebSocket) from routing through the proxy
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+os.environ["no_proxy"] = "localhost,127.0.0.1"
+
 from google.antigravity import Agent
 
 # Import custom tools
