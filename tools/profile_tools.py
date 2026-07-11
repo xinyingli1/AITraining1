@@ -15,21 +15,68 @@ PROFILE_PATH = os.path.join(
     "user_profile.json",
 )
 
-# Initialize Firestore client
-# If running in GCP, this automatically uses the service account credentials
+# Initialize Firestore client with automatic database check and creation
 _db = None
-try:
-    _db = firestore.Client()
-except Exception:
-    _db = None
+
+
+def _ensure_firestore_db() -> firestore.Client | None:
+    global _db
+    if _db is not None:
+        return _db
+
+    try:
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if not project:
+            try:
+                import google.auth
+                _, project = google.auth.default()
+            except Exception:
+                pass
+
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        database_id = "(default)"
+
+        # Check and create the Firestore database if it does not exist
+        if project:
+            try:
+                from google.cloud import firestore_admin_v1
+                from google.api_core.exceptions import NotFound
+
+                admin = firestore_admin_v1.FirestoreAdminClient()
+                db_name = f"projects/{project}/databases/{database_id}"
+                try:
+                    admin.get_database(name=db_name)
+                except NotFound:
+                    print(f"Firestore database {database_id} not found in {project}. Creating now...")
+                    db_obj = firestore_admin_v1.types.Database(
+                        location_id=location,
+                        type_=firestore_admin_v1.types.Database.DatabaseType.FIRESTORE_NATIVE,
+                    )
+                    operation = admin.create_database(
+                        parent=f"projects/{project}",
+                        database_id=database_id,
+                        database=db_obj,
+                    )
+                    operation.result(timeout=180)
+                    print(f"✅ Successfully created Firestore database {database_id} in {project}.")
+            except Exception as admin_err:
+                # If admin check/creation fails (e.g. local credentials lack admin permission), proceed to client
+                pass
+
+        _db = firestore.Client(project=project)
+        return _db
+    except Exception as e:
+        print(f"Could not initialize Firestore client: {e}")
+        return None
 
 
 def _get_firestore_profile() -> dict | None:
-    if not _db:
+    db = _ensure_firestore_db()
+    if not db:
         return None
     try:
         user_id = os.environ.get("USER_ID", "default_user")
-        doc_ref = _db.collection("meal_planning_profiles").document(user_id)
+        doc_ref = db.collection("meal_planning_profiles").document(user_id)
         doc = doc_ref.get()
         if doc.exists:
             return doc.to_dict()
@@ -44,11 +91,12 @@ def _get_firestore_profile() -> dict | None:
 
 
 def _update_firestore_profile(profile: dict) -> bool:
-    if not _db:
+    db = _ensure_firestore_db()
+    if not db:
         return False
     try:
         user_id = os.environ.get("USER_ID", "default_user")
-        doc_ref = _db.collection("meal_planning_profiles").document(user_id)
+        doc_ref = db.collection("meal_planning_profiles").document(user_id)
         doc_ref.set(profile)
         return True
     except Exception as e:

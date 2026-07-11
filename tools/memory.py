@@ -51,18 +51,25 @@ async def extract_and_save_memory(user_input: str, agent_response: str):
 
     try:
         api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            log_json(
-                "WARNING",
-                "Memory extraction skipped: GEMINI_API_KEY not set",
-                intent="extract_user_preferences",
-                stage="failed",
-                outcome="skipped_no_api_key",
-            )
-            return
-
-        # Initialize the Google GenAI client
-        client = genai.Client(api_key=api_key)
+        if api_key:
+            client = genai.Client(api_key=api_key)
+        else:
+            try:
+                import google.auth
+                _, project = google.auth.default()
+            except Exception:
+                project = None
+            if not project:
+                log_json(
+                    "WARNING",
+                    "Memory extraction skipped: Neither GEMINI_API_KEY nor google.auth.default() project found",
+                    intent="extract_user_preferences",
+                    stage="failed",
+                    outcome="skipped_no_credentials",
+                )
+                return
+            location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+            client = genai.Client(vertexai=True, project=project, location=location)
 
         prompt = f"""
         Analyze the following conversation turn between a User and a Meal Planning Agent.

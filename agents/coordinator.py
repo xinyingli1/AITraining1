@@ -3,7 +3,7 @@ import contextvars
 from google.antigravity import Agent, LocalAgentConfig, types
 from google.antigravity.hooks import hooks
 from tools.memory import capture_user_input, post_turn_memory_hook
-from agents import profile_agent, planner_agent, calendar_agent, payment_agent
+from agents import profile_agent, planner_agent, calendar_agent, payment_agent, get_default_gemini_config
 
 
 @hooks.on_compaction
@@ -24,10 +24,7 @@ When a user asks a question, break it down, call the necessary subagents, and th
 If a subagent asks for information, provide it if you have it, or ask the user.
 """
 
-# Context variables to pass the current session context down to the tool calls
-current_session_id = contextvars.ContextVar(
-    "current_session_id", default="default_session"
-)
+# Context variables to pass the current save directory down to the tool calls
 current_save_dir = contextvars.ContextVar(
     "current_save_dir", default="/tmp/conversations"
 )
@@ -44,39 +41,27 @@ def ensure_trajectory_exists(conversation_id: str, save_dir: str):
 
 
 async def call_profile_agent(prompt: str) -> str:
-    """Delegates a task to the Profile Agent. Use this to view or update the user's preferences, allergies, or restrictions."""
-    conv_id = current_session_id.get()
+    """Delegates a task to the Profile Agent. Use this for reading or updating dietary preferences, allergies, or restrictions."""
     save_dir = current_save_dir.get()
-    sub_conv_id = f"{conv_id}_profile"
-
-    ensure_trajectory_exists(sub_conv_id, save_dir)
-    config = profile_agent.get_agent_config(conv_id, save_dir)
+    config = profile_agent.get_agent_config(save_dir)
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         return await response.text()
 
 
 async def call_meal_planner_agent(prompt: str) -> str:
-    """Delegates a task to the Meal Planner Agent. Use this to search recipes, plan meals, or get ingredient lists."""
-    conv_id = current_session_id.get()
+    """Delegates a task to the Meal Planner Agent. Use this for recipe ideas, dinner suggestions, and meal planning."""
     save_dir = current_save_dir.get()
-    sub_conv_id = f"{conv_id}_planner"
-
-    ensure_trajectory_exists(sub_conv_id, save_dir)
-    config = planner_agent.get_agent_config(conv_id, save_dir)
+    config = planner_agent.get_agent_config(save_dir)
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         return await response.text()
 
 
 async def call_calendar_agent(prompt: str) -> str:
-    """Delegates a task to the Calendar Agent. Use this to check calendar availability or schedule events (meals, shopping, cooking)."""
-    conv_id = current_session_id.get()
+    """Delegates a task to the Calendar Scheduler Agent. Use this to schedule events, check availability, or list existing calendar entries."""
     save_dir = current_save_dir.get()
-    sub_conv_id = f"{conv_id}_calendar"
-
-    ensure_trajectory_exists(sub_conv_id, save_dir)
-    config = calendar_agent.get_agent_config(conv_id, save_dir)
+    config = calendar_agent.get_agent_config(save_dir)
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         return await response.text()
@@ -84,18 +69,14 @@ async def call_calendar_agent(prompt: str) -> str:
 
 async def call_payment_agent(prompt: str) -> str:
     """Delegates a task to the Payment Agent. Use this to process payments for groceries, meal kits, or deliveries."""
-    conv_id = current_session_id.get()
     save_dir = current_save_dir.get()
-    sub_conv_id = f"{conv_id}_payment"
-
-    ensure_trajectory_exists(sub_conv_id, save_dir)
-    config = payment_agent.get_agent_config(conv_id, save_dir)
+    config = payment_agent.get_agent_config(save_dir)
     async with Agent(config) as agent:
         response = await agent.chat(prompt)
         return await response.text()
 
 
-def get_coordinator_config(conversation_id: str, save_dir: str) -> LocalAgentConfig:
+def get_coordinator_config(save_dir: str = "/tmp/conversations") -> LocalAgentConfig:
     return LocalAgentConfig(
         system_instructions=SYSTEM_INSTRUCTIONS,
         tools=[
@@ -109,6 +90,6 @@ def get_coordinator_config(conversation_id: str, save_dir: str) -> LocalAgentCon
             enable_subagents=True,
             compaction_threshold=10000,
         ),
-        conversation_id=conversation_id,
         save_dir=save_dir,
+        gemini_config=get_default_gemini_config(),
     )

@@ -9,7 +9,6 @@ from google.antigravity import Agent
 from tools.telemetry import init_telemetry, get_tracer
 from agents.coordinator import (
     get_coordinator_config,
-    current_session_id,
     current_save_dir,
     ensure_trajectory_exists,
 )
@@ -80,7 +79,7 @@ async def chat(request: ChatRequest):
     ensure_trajectory_exists(conversation_id, SAVE_DIR)
 
     # Create the coordinator configuration
-    config = get_coordinator_config(conversation_id, SAVE_DIR)
+    config = get_coordinator_config(SAVE_DIR)
 
     global tracer
     if tracer is None:
@@ -96,7 +95,6 @@ async def chat(request: ChatRequest):
             # Start the agent session and send the message
             async with Agent(config) as agent:
                 # Set the session context for the worker tools
-                current_session_id.set(agent.conversation_id)
                 current_save_dir.set(SAVE_DIR)
 
                 # Execute the agent chat
